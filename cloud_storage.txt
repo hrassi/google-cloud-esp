@@ -1,0 +1,212 @@
+
+         MICROPYTHON ESP32 - GOOGLE CLOUD STORAGE MODULE
+
+Purpose
+
+This guide explains how to use the MicroPython cloud_storage.py module
+on an ESP32 running MicroPython. This is the ESP32 module that
+communicates directly with Google Cloud Storage (GCS). It is NOT the
+separate Pythonista or Cloud Run cloud_storage.py module.
+
+The module uses Google Cloud Storage V4 HMAC-SHA256 signed HTTPS
+requests. It supports reading and writing JSON objects in the GCS
+bucket.
+
+MODULE REQUIREMENTS
+
+The ESP32 project must contain cloud_storage.py and the MicroPython
+libraries used by the module, including: - urequests - ujson - hashlib -
+hmac - ntptime
+
+The module also uses MicroPython-compatible date/time and
+garbage-collection functionality.
+
+Before using the module, make sure the ESP32 has: 1. A working Wi-Fi
+connection. 2. Correct Google Cloud Storage HMAC access ID and secret.
+3. The correct bucket name and region. 4. Accurate system time. The
+module’s sync_time() function synchronizes the ESP32 clock using NTP.
+
+GOOGLE CLOUD SETTINGS
+
+The module is called with these Google Cloud parameters:
+
+-   access_id: Google Cloud Storage HMAC access ID
+-   secret: Google Cloud Storage HMAC secret
+-   bucket: bucket name, for example “sam_cloud_1”
+-   region: bucket region, for example “us-central1”
+-   object_name: object/file name inside the bucket
+
+The HMAC secret is used as supplied by Google Cloud Storage. The module
+signs requests using the GCS V4 signing process and the scope:
+date/region/storage/goog4_request
+
+PUBLIC FUNCTIONS
+
+1.  sync_time()
+
+Synchronizes the ESP32 clock with NTP. Call this after Wi-Fi is
+connected and before making signed GCS requests. Correct UTC time is
+required for request signatures.
+
+Example:
+
+    import cloud_storage
+
+    cloud_storage.sync_time()
+
+2.  write_json(access_id, secret, bucket, region, object_name, data)
+
+Uploads a Python dictionary (or other JSON-serializable data) to GCS as
+a JSON object. If the object already exists, it is overwritten.
+
+Returns: - True : upload succeeded - False : upload failed
+
+Example:
+
+    import cloud_storage
+
+    result = cloud_storage.write_json(
+        ACCESS_ID,
+        SECRET,
+        "sam_cloud_1",
+        "us-central1",
+        "esp4.json",
+        {
+            "device": "ESP4",
+            "analog33": 1850,
+            "gpio25": 0
+        }
+    )
+
+    if result:
+        print("JSON uploaded successfully")
+    else:
+        print("JSON upload failed")
+
+3.  read_json(access_id, secret, bucket, region, object_name)
+
+Downloads a JSON object from GCS and decodes it into a Python object,
+normally a dictionary.
+
+Returns: - A decoded Python object when the read succeeds. - None when
+the object cannot be read or the request fails.
+
+Example:
+
+    data = cloud_storage.read_json(
+        ACCESS_ID,
+        SECRET,
+        "sam_cloud_1",
+        "us-central1",
+        "esp4_command.json"
+    )
+
+    if data is not None:
+        print("Received:", data)
+    else:
+        print("No data received")
+
+TYPICAL ESP32 SETUP
+
+Keep your credentials and bucket settings together near the top of
+main.py (or in a separate configuration module):
+
+    import cloud_storage
+
+    ACCESS_ID = "YOUR_GCS_HMAC_ACCESS_ID"
+    SECRET = "YOUR_GCS_HMAC_SECRET"
+
+    BUCKET = "sam_cloud_1"
+    REGION = "us-central1"
+
+After connecting to Wi-Fi, synchronize the clock:
+
+    cloud_storage.sync_time()
+
+Then the ESP32 can read or write JSON objects whenever needed.
+
+EXAMPLE: UPLOAD A STATUS FILE
+
+    status = {
+        "device": "ESP4",
+        "analog33": 1850,
+        "gpio25": 0
+    }
+
+    ok = cloud_storage.write_json(
+        ACCESS_ID, SECRET, BUCKET, REGION,
+        "esp4.json", status
+    )
+
+    print("Upload result:", ok)
+
+EXAMPLE: READ A COMMAND FILE
+
+    command = cloud_storage.read_json(
+        ACCESS_ID, SECRET, BUCKET, REGION,
+        "esp4_command.json"
+    )
+
+    if command is not None:
+        print("Command received:", command)
+        # Check the received values before applying them to GPIO outputs.
+    else:
+        print("Could not read command file")
+
+IMPORTANT USAGE NOTES
+
+-   Connect to Wi-Fi before calling sync_time(), read_json(), or
+    write_json().
+-   Call sync_time() before signed requests so the ESP32 has correct UTC
+    time.
+-   The GCS request timestamp is UTC and uses the x-goog-date format
+    YYYYMMDDTHHMMSSZ. This is separate from the Lebanon local timestamps
+    used in ESP status JSON data.
+-   read_json() returns None on failure. Always check for None before
+    using the returned data.
+-   write_json() returns True or False. Check the result if the upload
+    matters.
+-   A write to an existing object replaces its contents.
+-   Use the exact object name, including its .json extension.
+-   The module performs authenticated HTTPS GET and PUT requests to
+    storage.googleapis.com using GCS V4 HMAC-SHA256 signing.
+-   Do not confuse this module’s function signatures with the Pythonista
+    cloud_storage.py module. Pythonista uses simpler calls such as
+    write_json(filename, data), while the ESP32 module requires the GCS
+    credentials, bucket, and region as arguments.
+    
+    
+this is how to use cloud storage :
+
+
+import cloud_storage
+
+
+# Google Cloud Storage configuration: 
+
+GCS_ACCESS_ID = "GOOG*******************************4EPWZ"
+GCS_SECRET_KEY = "3Y***********************************5u"
+GCS_BUCKET = "sam_cloud_1"
+GCS_REGION = "us-central1"
+
+
+# Synchronize UTC clock for Google authentication
+if cloud_storage.sync_time():
+
+    # Write JSON file
+    data = {"device": "ESP1", "value": 123}
+    ok = cloud_storage.write_json(
+        GCS_ACCESS_ID, GCS_SECRET_KEY, GCS_BUCKET, GCS_REGION,
+        "test_esp.json", data
+    )
+
+    # Read JSON file back
+    if ok:
+        result = cloud_storage.read_json(
+            GCS_ACCESS_ID, GCS_SECRET_KEY, GCS_BUCKET, GCS_REGION,
+            "test_esp.json"
+        )
+        print("Read result:", result)
+else:
+    print("Cloud test stopped: clock not synchronized")    
+
